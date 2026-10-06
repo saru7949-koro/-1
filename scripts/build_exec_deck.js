@@ -147,11 +147,122 @@ pres.addSection({ title: "役員報告" });
   s.addNotes("必要リード30件は、Sep報告と同じ式(着地理論値=成約+FCT×勝率+Backup×10%、必要リード=不足÷勝率)を10/5版の案件Excelに当てた値。9F版で再計算するとスライドの21件とほぼ一致する。");
 }
 
-// ---------------- Slide 2: アクションと挽回 ----------------
+
+// ---------------- Slide 2: Q3 ----------------
 {
   const s = pres.addSlide({ masterName: "TITLE_ONLY", sectionTitle: "役員報告" });
-  s.addText("11月上旬までに8.7台を挽回、9F達成には棚卸の成果倍増が必要", { placeholder: "title" });
-  s.addText("厳しめの率(Backup昇格15%・引き戻し10%・リード商談化2%)で試算。11/7に9F達成可否と追加打ち手を判定", { placeholder: "body" });
+  s.addText("Q3 BGT18台に対し見込み10.0台、FCT決め切りとQ4前倒しで8台を埋める", { placeholder: "title" });
+  s.addText("Q3 FCT16件のうち13件が納期未定(C)。MTO品は受注から5週超のため、12月納品には11月上旬の受注確定がリミット", { placeholder: "body" });
+
+  const kpis = [
+    ["Q3 BGT(10〜12月)", "18台", "年間9F 60台のうち下期49台の一部", C.text2],
+    ["Q3 着地理論値(10/5)", "10.0台", "9F時点 12.2台から ▲2.2台", C.text2],
+    ["Q3 ギャップ", "8.0台", "FCTを全件取っても16台", C.accent4],
+    ["Q3 FCT", "16件", "うち納期未定(C) 13件・MTO 3件", C.accent4],
+  ];
+  kpis.forEach(([t, v, sub, col], i) => {
+    const x = 0.5 + i * 3.13, y = 1.55, w = 2.93, h = 1.3;
+    card(s, { x, y, w, h, name: `q3kpi-${i}` });
+    label(s, t, x + 0.2, y + 0.1, w - 0.4, { size: 12, color: C.accent5, name: `q3kpi-t-${i}` });
+    s.addText(v, { x: x + 0.2, y: y + 0.38, w: w - 0.4, h: 0.55, fontSize: 30, bold: true, color: col, margin: 0,
+      isTextBox: true, objectName: `q3kpi-v-${i}` });
+    label(s, sub, x + 0.2, y + 0.92, w - 0.4, { size: 10, bold: false, color: C.text1, h: 0.3, name: `q3kpi-s-${i}` });
+  });
+
+  const top = 3.1, colH = 3.85;
+  // Column 1: Q3 pipeline 9F -> 10/5
+  card(s, { x: 0.5, y: top, w: 3.7, h: colH, fill: C.background1, name: "q3-pipe" });
+  label(s, "Q3パイプライン(確度>0)", 0.5, top, 3.7, { size: 14, name: "q3-pipe-h" });
+  s.addChart(pres.charts.BAR, [
+    { name: "9F時点", labels: ["FCT", "Backup"], values: [18, 13] },
+    { name: "10/5時点", labels: ["FCT", "Backup"], values: [16, 3] },
+  ], {
+    x: 0.5, y: top + 0.35, w: 3.7, h: 2.3, barDir: "col", barGrouping: "clustered", barGapWidthPct: 60,
+    chartColors: [HEX.accent6, HEX.accent1], showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 11,
+    dataLabelColor: HEX.dk1, showLegend: true, legendPos: "t", legendFontSize: 10, catAxisLabelFontSize: 11,
+    valAxisHidden: true, valGridLine: { style: "none" }, catGridLine: { style: "none" },
+    catAxisLabelColor: HEX.dk1, ...axisFont, objectName: "q3-pipe-chart",
+  });
+  s.addText([
+    { text: "Backupが13件→3件に減り、予備がほぼない", options: { bold: true, breakLine: true } },
+    { text: "FCT16件: SH7・MA7・ID1・FP1", options: { breakLine: true } },
+    { text: "顧客: アカデミア10・バイオ企業5・製薬1" },
+  ], { x: 0.65, y: top + 2.7, w: 3.4, h: 1.1, fontSize: 11, color: C.text1, margin: 0, valign: "top",
+    paraSpaceAfter: 3, isTextBox: true, objectName: "q3-pipe-note" });
+
+  // Column 2: Q3 by agent
+  const x2 = 4.45;
+  card(s, { x: x2, y: top, w: 4.1, h: colH, fill: C.background1, name: "q3-agent" });
+  label(s, "代理店別(一次店、Q3)", x2, top, 4.1, { size: 14, name: "q3-agent-h" });
+  const hdr = ["一次店", "FCT", "Backup", "うち納期未定", "見込み"].map((t) => ({
+    text: t, options: { bold: true, fontSize: 9, color: C.background1, fill: { color: C.text2 }, align: t === "一次店" ? "left" : "center" },
+  }));
+  const rows = [
+    ["富士フイルム和光", 6, 1, 5, "3.5"],
+    ["池田理化", 4, 1, 3, "2.7"],
+    ["ナカライテスク", 2, 1, 1, "1.4"],
+    ["バイオテック・ラボ", 1, 0, 1, "0.7"],
+    ["その他・未記入", 3, 0, 3, "1.8"],
+    ["計", 16, 3, 13, "10.0"],
+  ].map((r, i) => r.map((v, j) => ({ text: String(v), options: {
+    align: j === 0 ? "left" : "center", fill: { color: i === 5 ? C.background2 : C.background1 },
+    bold: i === 5 || (j === 0 && i === 0), color: j === 3 && v >= 3 && i < 5 ? C.accent4 : C.text1 } })));
+  s.addTable([hdr, ...rows], {
+    x: x2, y: top + 0.4, w: 4.1, colW: [1.45, 0.5, 0.6, 0.85, 0.7], rowH: 0.3, fontSize: 10,
+    fontFace: THEME.bodyFontFace, border: { type: "solid", pt: 0.5, color: HEX.lt2 }, margin: [0, 0.04, 0, 0.04],
+    valign: "middle", objectName: "q3-agent-table",
+  });
+  s.addText([
+    { text: "和光・池田でQ3 FCTの6割(10件)", options: { bold: true, breakLine: true } },
+    { text: "納期を月決(A)・Q決(B)に固められるかが勝負", options: { breakLine: true } },
+    { text: "見込み = FCT×モデル勝率 + Backup×10%", options: { color: C.accent5, fontSize: 9 } },
+  ], { x: x2 + 0.15, y: top + 2.65, w: 3.8, h: 1.1, fontSize: 11, color: C.text1, margin: 0, valign: "top",
+    paraSpaceAfter: 3, isTextBox: true, objectName: "q3-agent-note" });
+
+  // Column 3: path to 18
+  const x3 = 8.8;
+  card(s, { x: x3, y: top, w: 4.03, h: colH, fill: C.background1, name: "q3-path" });
+  label(s, "18台への道筋(必要水準)", x3, top, 4.03, { size: 14, name: "q3-path-h" });
+  const pcats = ["現状見込み", "必要水準"];
+  s.addChart(pres.charts.BAR, [
+    { name: "見込み", labels: pcats, values: [10.0, 0] },
+    { name: "Q3 FCT決め切り", labels: pcats, values: [0, 13] },
+    { name: "Backup昇格", labels: pcats, values: [0, 1] },
+    { name: "Q4から前倒し", labels: pcats, values: [0, 4] },
+  ], {
+    x: x3, y: top + 0.35, w: 1.95, h: 3.0, barDir: "col", barGrouping: "stacked", barGapWidthPct: 35,
+    chartColors: [HEX.accent5, HEX.accent1, HEX.accent3, HEX.accent2], showValue: true, dataLabelPosition: "ctr",
+    dataLabelFormatCode: "0.0;;;", dataLabelFontSize: 11, dataLabelColor: HEX.lt1, showLegend: false,
+    valAxisHidden: true, valAxisMaxVal: 19, valAxisMinVal: 0, valGridLine: { style: "none" },
+    catGridLine: { style: "none" }, catAxisLabelFontSize: 10, catAxisLabelColor: HEX.dk1, ...axisFont,
+    objectName: "q3-path-chart",
+  });
+  const legend = [
+    ["Q3 FCT決め切り 13台", "16件中13件(81%)。モデル勝率なら約10件", C.accent1],
+    ["Backup昇格 1台", "Q3 Backup 3件から1件", C.accent3],
+    ["Q4から前倒し 4台", "Q4 FCTのうち確度60%以上・納期A/Bの8件から半分", C.accent2],
+  ];
+  legend.forEach(([t, d, col], i) => {
+    const ly = top + 0.55 + i * 0.95;
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: x3 + 1.98, y: ly + 0.05, w: 0.18, h: 0.18, rectRadius: 0.03,
+      fill: { color: col }, line: { color: col }, objectName: `q3-lg-${i}` });
+    s.addText([
+      { text: t, options: { bold: true, breakLine: true } },
+      { text: d, options: { fontSize: 9, color: C.text1 } },
+    ], { x: x3 + 2.22, y: ly, w: 1.76, h: 0.85, fontSize: 10, color: C.text2, margin: 0, valign: "top",
+      isTextBox: true, objectName: `q3-lg-t-${i}` });
+  });
+  label(s, "前倒し分は年間の台数を増やさない点に注意", x3 + 0.15, top + 3.4, 3.8,
+    { size: 10, bold: false, color: C.accent5, name: "q3-path-note" });
+
+  s.addNotes("Q3=2026年10〜12月。見込みは案件Excel(10/5版)のQ3案件に、年間と同じ式(FCT×モデル勝率+Backup×10%)を当てた値。必要水準の内訳(決め切り13・Backup1・前倒し4)は18台に届く組み合わせの一例で、予測ではない。MTO>Week+5週は案件Excelの記載。");
+}
+
+// ---------------- Slide 3: アクションと挽回 ----------------
+{
+  const s = pres.addSlide({ masterName: "TITLE_ONLY", sectionTitle: "役員報告" });
+  s.addText("11/7までにQ3受注を確定し年間8.7台を挽回、9F達成には棚卸の倍増が必要", { placeholder: "title" });
+  s.addText("Q3は11/7までに受注確定(12月納品のリミット)。年間は厳しめの率(昇格15%・引き戻し10%・商談化2%)で試算し、11/7に判定", { placeholder: "body" });
 
   // Waterfall (stacked bar with invisible base)
   const top = 1.55;
@@ -210,14 +321,16 @@ pres.addSection({ title: "役員報告" });
       color: C.background1, margin: 0, isTextBox: true, objectName: `wk-t-${i}` });
   });
   const lanes = [
+    ["Q3刈り取り", C.accent4, [
+      [0, 1, "Q3 FCT16件 納期確定"],
+      [1, 2, "Q4前倒し8件 年内受注交渉"],
+      [3, 2, "PO回収・12月納品確定"],
+    ]],
     ["代理店", C.accent1, [
       [0, 1, "上位5社 棚卸会"],
       [1, 1, "Backup昇格判定 40件"],
+      [2, 2, "ID/FP デモ・見積(11月期限)"],
       [1, 2, "来期移動・前倒し 64件の引き戻し交渉"],
-    ]],
-    ["案件", C.accent1, [
-      [0, 1, "A案件43件 期日確定"],
-      [1, 2, "ID/FP デモ・見積(11月期限)"],
     ]],
     ["インハウス", C.accent2, [
       [0, 4, "テレマ 422名(10/9〜、S/A 44名を先行)"],
@@ -226,7 +339,7 @@ pres.addSection({ title: "役員報告" });
     ]],
     ["管理", C.accent5, [
       [3, 1, "10月末FCTレビュー"],
-      [4, 1, "9F達成判定"],
+      [4, 1, "Q3・9F判定"],
     ]],
   ];
   let y = hy + 0.45;
@@ -248,7 +361,7 @@ pres.addSection({ title: "役員報告" });
       margin: 0, valign: "middle", isTextBox: true, objectName: `lane-t-${li}` });
     placed.forEach((b, bi) => {
       const bx = gx + lw + b.st * cw + 0.03, by = y + 0.05 + b.r * (barH + gap);
-      const isLimit = b.st === 4;
+      const isLimit = b.st === 4 && b.len === 1;
       s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: bx, y: by, w: b.len * cw - 0.1, h: barH, rectRadius: 0.06,
         fill: { color: isLimit ? C.accent4 : col }, line: { color: isLimit ? C.accent4 : col },
         objectName: `bar-${li}-${bi}` });
@@ -263,7 +376,7 @@ pres.addSection({ title: "役員報告" });
   card(s, { x: gx + 0.15, y: dy, w: gw - 0.3, h: dh, fill: C.background2, name: "ask" });
   s.addText([
     { text: "役員へのお願い", options: { bold: true, color: C.accent4, breakLine: true } },
-    { text: "主力代理店(和光・池田・レスター・ナカライ)の幹部へ、年度内前倒しの要請(10月中)", options: { bullet: { indent: 12 }, breakLine: true } },
+    { text: "主力代理店(和光・池田・レスター・ナカライ)の幹部へ、Q3案件の年内受注と年度内前倒しの要請(10月中)", options: { bullet: { indent: 12 }, breakLine: true } },
     { text: "前倒し案件向けの価格・在庫条件の決裁枠(11/7の判定で使う)", options: { bullet: { indent: 12 } } },
   ], { x: gx + 0.3, y: dy + 0.05, w: gw - 0.6, h: dh - 0.1, fontSize: 11, color: C.text1, margin: 0,
     valign: "middle", paraSpaceAfter: 3, isTextBox: true, objectName: "ask-text" });
