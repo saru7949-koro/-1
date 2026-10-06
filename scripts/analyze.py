@@ -23,7 +23,6 @@ DECK_9F = pd.DataFrame(
      "9F不足": [-4, -4, 0, -2, -1], "必要リード": [6, 6, 0, 7, 2]},
     index=["SH", "MA", "SA", "ID", "FP"])
 
-GENRE = {"AC": "アカデミア", "BT": "企業(バイオ)", "BTL": "企業(バイオ)", "PHM": "企業(製薬)"}
 HIGH = {"ID", "FP"}
 
 
@@ -289,7 +288,9 @@ def action_list(op, pf, cfg, as_of):
     x["商談期限(目安)"] = x.apply(deadline, axis=1)
     x["推奨打ち手"] = x.apply(play, axis=1)
     x["優先度"] = x.apply(prio, axis=1)
-    x["顧客ジャンル"] = x["顧客ジャンル"].map(GENRE).fillna(x["顧客ジャンル"])
+    dfn = cfg["definitions"]
+    x["顧客ジャンル"] = x["顧客ジャンル"].map(dfn["genre"]).fillna(x["顧客ジャンル"])
+    x["納期確度"] = x["納期確度"].map(lambda v: f"{v}({dfn['delivery'][v]})" if v in dfn["delivery"] else v)
     x["課題分類"] = x["課題タグ"].apply(lambda t: "・".join(t))
     x["案件ID"] = "P1005-R" + x["Excel行"].astype(str)
     x["アクション期日"] = x["期日"].dt.strftime("%Y-%m-%d").fillna("")
@@ -377,7 +378,7 @@ def main(snap_day):
     stats = dict(
         land9=land9, land10=land10, deck=deck, mtab=mtab, moved=moved, agents=agents, sub=sub, acts=acts,
         lead_phase=lead_phase, lead_fy=lead_fy, lr=lr, demo_t=demo_t, wl=wl, month_t=month_t, measures=measures,
-        sc=sc, op=op, pf=pf, b=b)
+        sc=sc, op=op, pf=pf, b=b, cfg=cfg)
     out = ROOT / "出力"
     out.mkdir(exist_ok=True)
     tag = snap_day.replace("-", "")
@@ -395,24 +396,35 @@ def scenario(b, land10, op, pf, moved, cfg):
     mv = moved[(moved["変化"] == "期外移動(来期以降)") & moved["モデル"].isin(list(wr))]
     back_unit = sum(wr[m] - 0 for m in mv["モデル"])
     avg_wr = sum(wr.values()) / len(wr)
-    new_rate = 30 / 94  # slide4: 9Fまでの新規登録94件のうちFCT化30件
+    sc = cfg["scenario"]
+    up, pb, lm, nf = sc["upgrade_rate"], sc["pullback_rate"], sc["lead_meeting_rate"], sc["new_to_fct_rate"]
+    tm = sc["telemarketing_targets"] * lm
+    gl = sc["guarantee_leads"] * lm
+    ex = sc["expo_leads"] * 2 * lm  # NGS EXPO(10月)+細胞凝集研究会(11月)の2回
     rows = [
         ("不足(10/5時点)", None, None, round(short, 2), "着地理論値 − 9F目標(モデル合計)"),
-        ("① 下期Backup→FCT昇格", len(bk), "30%(仮置き)", round(up_unit * 0.30, 2),
-         f"対象{len(bk)}件 × 昇格率30% × (モデル勝率−10%)"),
-        ("② 期外移動案件の引き戻し", len(mv), "20%(仮置き)", round(back_unit * 0.20, 2),
-         f"9F以降に来期へ移った{len(mv)}件 × 引き戻し率20% × モデル勝率"),
-        ("③ テレマ(422名)からの新規FCT", 13, "FCT化32%", round(13 * new_rate * avg_wr, 2),
-         f"標準ケース13商談(slide7) × FCT化率{new_rate:.0%}(slide4: 30/94) × 平均勝率{avg_wr:.2f}"),
-        ("④ 150リード保証(148件)からの新規FCT", 4, "FCT化32%", round(4 * new_rate * avg_wr, 2),
-         f"148件 × 商談化3%(仮置き)≒4商談 × {new_rate:.0%} × {avg_wr:.2f}"),
-        ("⑤ 展示会・学会(NGS EXPO/細胞凝集研究会)", 3, "FCT化32%", round(3 * new_rate * avg_wr, 2),
-         f"FY25-Q2展示会110リード(slide3)×商談化3%(仮置き)≒3商談 × {new_rate:.0%} × {avg_wr:.2f}"),
+        ("① 下期Backup→FCT昇格", len(bk), f"昇格{up:.0%}", round(up_unit * up, 2),
+         f"対象{len(bk)}件 × 昇格率{up:.0%} × (モデル勝率−10%)"),
+        ("② 期外移動案件の引き戻し", len(mv), f"引き戻し{pb:.0%}", round(back_unit * pb, 2),
+         f"9F以降に来期へ移った{len(mv)}件 × 引き戻し率{pb:.0%} × モデル勝率"),
+        (f"③ テレマ({sc['telemarketing_targets']}名)からの新規FCT", round(tm, 1), f"商談化{lm:.0%}・FCT化{nf:.0%}",
+         round(tm * nf * avg_wr, 2),
+         f"{sc['telemarketing_targets']}名 × 商談化{lm:.0%}≒{tm:.1f}商談(slide7保守ケース相当) × FCT化{nf:.0%}(slide4: 30/94) × 平均勝率{avg_wr:.2f}"),
+        (f"④ 150リード保証({sc['guarantee_leads']}件)からの新規FCT", round(gl, 1), f"商談化{lm:.0%}・FCT化{nf:.0%}",
+         round(gl * nf * avg_wr, 2), f"{sc['guarantee_leads']}件 × {lm:.0%}≒{gl:.1f}商談 × {nf:.0%} × {avg_wr:.2f}"),
+        ("⑤ 展示会・学会(NGS EXPO/細胞凝集研究会)", round(ex, 1), f"商談化{lm:.0%}・FCT化{nf:.0%}",
+         round(ex * nf * avg_wr, 2),
+         f"{sc['expo_leads']}リード(FY25-Q2展示会実績)×2回 × {lm:.0%}≒{ex:.1f}商談 × {nf:.0%} × {avg_wr:.2f}"),
     ]
     t = pd.DataFrame(rows, columns=["項目", "対象件数", "率", "台", "算出根拠"])
     filled = t.loc[1:, "台"].sum()
     t.loc[len(t)] = ["①〜⑤ 合計", None, None, round(filled, 2), "①〜⑤の和"]
     t.loc[len(t)] = ["残ギャップ", None, None, round(short - filled, 2), "不足 − 合計(正なら未充足)"]
+    agl = up_unit * up + back_unit * pb
+    if short - filled > 0 and agl > 0:
+        k = (short - (filled - agl)) / agl
+        t.loc[len(t)] = ["参考: 不足を埋める昇格率・引き戻し率", None, f"昇格{up * k:.0%}・引き戻し{pb * k:.0%}", None,
+                         f"インハウス施策は据え置き、①②の率を同じ倍率({k:.1f}倍)で引き上げた場合"]
     return t
 
 
@@ -470,11 +482,13 @@ def premise_df(s, cfg):
         ("確度区分", "0%", "Sales Prob 0% は LOST/休止として集計外", "確定(slide4 注記)"),
         ("確度区分", "案件確度(Sales Prob %)", "代理店別の『確度加重(台)』でのみ参考利用", "参考"),
         ("列対応", "案件Excel", "見出しと実データが1列ずれているため 'Sales month' 列基準の位置で割当(担当=左隣)", "データから推定"),
-        ("列対応", "顧客ジャンル", "AC=アカデミア, BT/BTL=企業(バイオ), PHM=企業(製薬)", "仮置き"),
-        ("列対応", "納期確度", "A/B/C(Aが高い想定)", "仮置き"),
+        ("列対応", "顧客ジャンル", "AC=アカデミア, BT=バイオテック企業, PHM=製薬企業", "確定(10/6確認)"),
+        ("列対応", "顧客ジャンル BTL", "定義外のため BT(バイオテック企業)扱い", "仮置き"),
+        ("列対応", "納期確度", "A=月決, B=Q決, C=未定", "確定(10/6確認)"),
+        ("挽回シナリオ", "率", "Backup昇格15%・引き戻し10%・リード商談化2%(厳しめ設定)", "確定(10/6確認)"),
         ("代理店", "一次店の判定", "主要一次店(" + "・".join(cfg["rules"]["primary_agents"]) + ")を含めばそれを一次店、無ければ末尾を一次店", "仮置き"),
         ("代理店", "BTL", "バイオテック・ラボの略と解釈", "仮置き"),
-        ("上期▲7台", "扱い", "9F目標60台=1H実績11台+下期49台。9F達成=上期▲7台(7F比)の挽回と同義として扱う", "仮置き"),
+        ("上期▲7台", "扱い", "9F目標60台に含まれる(1H実績11台+下期49台)。9F達成=上期▲7台の挽回", "確定(10/6確認)"),
         ("商談期限", "目安", "High(ID/FP): アカデミア11月・企業1月 / Low-Mid(SH/MA/SA): アカデミア12月・企業1月", "確定(Sep資料 slide3)"),
         ("個人情報", "出力方針", "施設名・個人名・自由記述原文は出力しない。案件はスナップショットのExcel行番号(案件ID)で参照", "確定"),
     ]
@@ -491,6 +505,7 @@ def PLAN_ROWS(s):
     nA = int((acts["優先度"] == "A").sum())
     top = [a for a in ag.index if a not in ("(未記入)", "未定")][:5]
     plan_m = list(PLAN_MODELS)
+    s_up = s["cfg"]["scenario"]["upgrade_rate"]
     op = s["op"]
     nbk = int((op["open_BK"] & op["モデルイニシャル"].isin(plan_m)).sum())
     mvr = s["moved"][(s["moved"]["変化"] == "期外移動(来期以降)") & s["moved"]["モデル"].isin(plan_m)]
@@ -508,7 +523,7 @@ def PLAN_ROWS(s):
         ("W1", "10/6-10/10", "全体", "期日超過・アクション未記入の案件を担当別に解消",
          f"{stale}件", "未記入0件", "03_代理店別"),
         ("W2", "10/13-10/17", "代理店", "Backup→FCT昇格確認(予算・時期・仕様の3点)",
-         f"下期Backup{nbk}件", "昇格判定完了、昇格30%(仮置き)", "05_挽回シナリオ①"),
+         f"下期Backup{nbk}件", f"昇格判定完了、昇格{s_up:.0%}以上", "05_挽回シナリオ①"),
         ("W2", "10/13-10/17", "代理店", "来期へ移った案件の引き戻し交渉(年度末予算・補正・価格条件)",
          f"{nunion}件(9F以降の期外移動{nmv}件とFY27前倒し候補の和集合)", "引き戻し可否の回答回収", "02_案件移動, 05_挽回シナリオ②"),
         ("W2", "10/13-10/17", "インハウス", "NGS EXPO2026(10月)リードを48h以内に一次店へ配分・同行設定",
@@ -547,7 +562,10 @@ def write_md(path, s, cfg):
                 "うちProspecting", "FY20-25勝率", "期日超過", "アクション未記入", "挽回ポテンシャル(台)", "打ち手区分"]].head(15)
     lr = s["lr"]
     pros = int(lr["Prospecting"].sum())
-    gap_left = float(sc.iloc[-1]["台"])
+    gap_row = sc[sc["項目"] == "残ギャップ"].iloc[0]
+    gap_left = float(gap_row["台"])
+    need_row = sc[sc["項目"].str.startswith("参考")]
+    need_rates = need_row.iloc[0]["率"] if len(need_row) else ""
     acts = s["acts"]
     nA = int((acts["優先度"] == "A").sum())
     known = ag.drop(index=[i for i in ("(未記入)",) if i in ag.index])
@@ -572,9 +590,9 @@ def write_md(path, s, cfg):
              f"主な原因は、9F以降に今期の案件{nmove}件(うちBackup {nmove_bk}件)が来期以降へ移ったこと。今期の新規追加は{nnew}件にとどまる。")
     L.append(f"2. **埋め手の主力は代理店がすでに持っている案件。インハウスリードは補助。** "
              f"不足{short:.1f}台に対し、Backup昇格と期外移動案件の引き戻しで{agl:.1f}台、"
-             f"テレマ・リード保証・展示会で{inh:.1f}台(率は仮置き、表6)。"
-             + (f"合計{agl + inh:.1f}台で不足をかろうじて上回る程度なので、仮置きの率が下振れすれば届かない。"
-                if gap_left <= 0 else f"合計{agl + inh:.1f}台で、まだ{gap_left:.1f}台足りない。")
+             f"テレマ・リード保証・展示会で{inh:.1f}台(厳しめの率で試算、表6)。"
+             + (f"合計{agl + inh:.1f}台で不足をかろうじて上回る程度なので、率が下振れすれば届かない。"
+                if gap_left <= 0 else f"合計{agl + inh:.1f}台で、まだ{gap_left:.1f}台足りない。埋めるには、代理店との棚卸で{need_rates}を実現するか、新規の大型案件を取る必要がある。")
              + 
              "新規登録から今期FCTになるのは約32%(slide4: 30/94)。商談期限(アカデミアはHighが11月・Low-Midが12月、企業は1月)にも間に合わせる必要がある。")
     L.append(f"3. **下期の着地寄与は上位5社({'・'.join(top5.index)})で{share_top:.0%}を占める。** "
@@ -588,14 +606,21 @@ def write_md(path, s, cfg):
         L.append(f"6. **IDはデモの有無で勝率が大きく違う(デモ有 {demo.loc['ID', 'デモ有_勝-敗']}={demo.loc['ID', 'デモ有_勝率']:.0%}、"
                  f"デモ無 {demo.loc['ID', 'デモ無_勝-敗']}={demo.loc['ID', 'デモ無_勝率']:.0%}、FY20-25)。** "
                  "IDは必要リードが最も多い(勝率30%)ので、下期のID案件はデモを必須にし、11月の期限(アカデミア)から逆算して日程を押さえる。SH/MA/SAではデモ有無の差はほとんどない。")
-    L.append(f"7. **下期FCT {h2tot}件のうち{mar}件が2027年3月に集中している。** 来期へずれ込むリスクが高いので、11〜12月に前倒しできる案件を見極める。\n")
+    mar_c = int(m10.loc[202703, "C"]) if (202703 in m10.index and "C" in m10.columns) else 0
+    h2_c = int(m10.loc["計", "C"]) if "C" in m10.columns else 0
+    L.append(f"7. **下期FCT {h2tot}件のうち{mar}件が2027年3月に集中し、そのうち{mar_c}件は納期確度C(未定)。** "
+             f"下期FCT全体でも{h2_c}件が納期未定のまま。来期へずれ込むリスクが高いので、棚卸で納期をB(Q決)以上に固められる案件と、11〜12月に前倒しできる案件を見極める。\n")
 
     L.append("## 2. 前提と算出式\n")
     L.append("- 着地理論値 = 成約 + FCT案件(未成約)×モデル勝率 + Backup×10%(Sep資料 slide2)")
     L.append("- 必要リード = 不足台数 ÷ モデル勝率(モデル別に計算して合計)。スライドの21件 = SH6 + MA6 + ID7 + FP2(端数はモデルごとに丸め)")
     L.append("- 勝率: " + "、".join(f"{k} {v['win_rate']:.0%}" for k, v in cfg["models"].items()) + "(スライド記載値。FY20-25の実勝率74%とは定義が違う)")
-    L.append("- 上期▲7台: 9F目標60台 = 1H実績11台 + 下期49台。9F目標を達成すれば上期▲7台(7F比)も挽回できる、とみなす(**仮置き**)")
-    L.append("- 顧客ジャンル AC=アカデミア / BT・BTL=企業(バイオ) / PHM=製薬、BTL=バイオテック・ラボ(代理店表記)は**仮置き**")
+    L.append("- 上期▲7台: 9F目標60台(1H実績11台 + 下期49台)に含まれる。9F目標を達成すれば上期▲7台も挽回できる(10/6確認)")
+    L.append("- 顧客ジャンル: AC=アカデミア / BT=バイオテック企業 / PHM=製薬企業(10/6確認)。BTL(2件)は定義外のためBT扱い(**仮置き**)")
+    L.append("- 納期確度: A=月決 / B=Q決 / C=未定(10/6確認)")
+    sc_cfg = cfg["scenario"]
+    L.append(f"- 挽回シナリオの率: Backup昇格{sc_cfg['upgrade_rate']:.0%}・引き戻し{sc_cfg['pullback_rate']:.0%}・リード商談化{sc_cfg['lead_meeting_rate']:.0%}(厳しめ設定、10/6確認)")
+    L.append("- 代理店表記の BTL はバイオテック・ラボの略と解釈(**仮置き**)")
     L.append("- 案件Excelは見出しと実データが1列ずれているので、'Sales month'列を基準に列の位置で読んでいる\n")
 
     L.append("## 3. 21件の再現と最新化(モデル別)\n")
@@ -631,7 +656,7 @@ def write_md(path, s, cfg):
 
     L.append("## 6. 不足の埋め方(シナリオ)\n")
     L.append(md_table(sc))
-    L.append("\n率に**仮置き**が入っているので、W2の棚卸結果(昇格率・引き戻し率の実績)で置き換える。\n")
+    L.append("\n率は厳しめの設定(10/6確認)。W2の棚卸で昇格・引き戻しの実績が出たら、その値に置き換えて再計算する。\n")
 
     L.append("## 7. インハウスリードと施策\n")
     L.append("直近の施策(施策表): " + " ／ ".join(s["measures"][1:]) + "\n")
@@ -647,9 +672,8 @@ def write_md(path, s, cfg):
              "全件のリストはExcelの「10_案件アクションリスト」シートにある。\n")
 
     L.append("## 9. 未確定事項(確認したいこと)\n")
-    L.append("- 上期▲7台を、9F目標(60台)に上乗せする必要があるか(本分析では9F目標の中に含まれるとみなした)")
-    L.append("- 顧客ジャンル(AC/BT/PHM/BTL)・納期確度(A/B/C)の正式な定義")
-    L.append("- 挽回シナリオの率(Backup昇格30%・引き戻し20%・リード商談化3%)")
+    L.append("- 顧客ジャンル『BTL』(2件)の意味(本分析ではBT=バイオテック企業として扱った)、『CL』(前倒し候補に1件)の意味")
+    L.append("- 代理店表記『BTL』はバイオテック・ラボの略でよいか")
     L.append("- 『9割が代理店紹介』の定義(紹介元か、納入経路か)。データ上は代理店未記入の案件がある")
     Path(path).write_text("\n".join(L) + "\n", encoding="utf-8")
 
