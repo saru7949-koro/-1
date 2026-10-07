@@ -3,6 +3,13 @@ const pptxgen = require("pptxgenjs");
 const { applyTheme } = require(process.env.PPTX_APPLY_THEME || "/root/.claude/skills/synced/e702c3d0-e0be-4bd4-91a1-b7fb6e6b4102_55712a2a-44a7-48e7-b712-bd90fba3fd2f/pptx/scripts/apply_theme.js");
 
 const OUT = process.argv[2] || "deck.pptx";
+// 数字は scripts/deck_metrics.py が書き出す JSON から読む
+const M = JSON.parse(require("fs").readFileSync(process.argv[3] || "deck_metrics.json", "utf8"));
+const A = M.annual, Q = M.q3, RC = M.recovery, AG = M.agents, AC = M.actions, WL = M.winloss, LB = M.label;
+const f1 = (v) => Number(v).toFixed(1);
+const pct = (v) => `${Math.round(v * 100)}%`;
+const ABBR = { "富士フイルム和光": "和光", "池田理化": "池田", "ナカライテスク": "ナカライ", "バイオテック・ラボ": "BTL" };
+const ab = (n) => ABBR[n] || n;
 const THEME = {
   name: "Pipeline Recovery",
   headFontFace: "Meiryo UI",
@@ -29,7 +36,7 @@ pres.defineSlideMaster({
       fontSize: 24, bold: true, color: C.text2, valign: "middle", align: "left", margin: 0 }, text: "" } },
     { placeholder: { options: { name: "body", type: "body", x: 0.5, y: 1.0, w: 12.33, h: 0.4,
       fontSize: 13, color: C.accent5, valign: "top", margin: 0 }, text: "" } },
-    { text: { text: "出典: 案件Excel(9FCT / 10月5日版)、FY20-25商談総括、FY26新規リード、LST MOC FY26 Sep報告。施設名・個人名は非掲載",
+    { text: { text: `出典: 案件Excel(9FCT / ${LB}版)、FY20-25商談総括、FY26新規リード、LST MOC FY26 Sep報告。施設名・個人名は非掲載`,
       options: { x: 0.5, y: 7.08, w: 10.5, h: 0.3, fontSize: 9, color: C.accent5, margin: 0 } } },
   ],
   slideNumber: { x: 12.4, y: 7.08, w: 0.45, h: 0.3, fontSize: 9, color: C.accent5, align: "right" },
@@ -51,15 +58,15 @@ pres.addSection({ title: "役員報告" });
 // ---------------- Slide 1: 現状 ----------------
 {
   const s = pres.addSlide({ masterName: "TITLE_ONLY", sectionTitle: "役員報告" });
-  s.addText("下期パイプラインは9F目標に14.9台不足、必要リードは21件から30件に拡大", { placeholder: "title" });
-  s.addText("9F以降、今期案件54件が来期へ移動。上期▲7台の挽回を含む9F目標60台の達成には、代理店の既存案件の引き上げが前提", { placeholder: "body" });
+  s.addText(`下期パイプラインは9F目標に${f1(A.short)}台不足、必要リードは${A.need9_deck}件から${A.need}件に拡大`, { placeholder: "title" });
+  s.addText(`9F以降、今期案件${A.moved}件が来期へ移動。上期▲7台の挽回を含む9F目標${A.target}台の達成には、代理店の既存案件の引き上げが前提`, { placeholder: "body" });
 
   // KPI cards
   const kpis = [
-    ["9F目標", "60台", "1H実績11台 + 下期49台", C.text2],
-    ["着地理論値(10/5)", "45.0台", "9F時点 48.2台から ▲3.2台", C.text2],
-    ["不足", "14.9台", "9F時点 11.8台から拡大", C.accent4],
-    ["必要リード(FCT相当)", "30件", "9F時点 21件 = 不足 ÷ モデル別勝率", C.accent4],
+    ["9F目標", `${A.target}台`, `1H実績${A.h1}台 + 下期${A.h2}台`, C.text2],
+    [`着地理論値(${LB})`, `${f1(A.land)}台`, `9F時点 ${f1(A.land9)}台から ▲${f1(A.land9 - A.land)}台`, C.text2],
+    ["不足", `${f1(A.short)}台`, `9F時点 ${f1(A.short9)}台から拡大`, C.accent4],
+    ["必要リード(FCT相当)", `${A.need}件`, `9F時点 ${A.need9_deck}件 = 不足 ÷ モデル別勝率`, C.accent4],
   ];
   kpis.forEach(([t, v, sub, col], i) => {
     const x = 0.5 + i * 3.13, y = 1.55, w = 2.93, h = 1.3;
@@ -75,8 +82,8 @@ pres.addSection({ title: "役員報告" });
   card(s, { x: 0.5, y: top, w: 4.0, h: colH, fill: C.background1, name: "col-pipe" });
   label(s, "パイプライン数(今期・確度>0)", 0.5, top, 4.0, { size: 14, name: "pipe-h" });
   s.addChart(pres.charts.BAR, [
-    { name: "9F時点", labels: ["FCT", "Backup"], values: [49, 88] },
-    { name: "10/5時点", labels: ["FCT", "Backup"], values: [51, 40] },
+    { name: "9F時点", labels: ["FCT", "Backup"], values: [A.fct9, A.bk9] },
+    { name: `${LB}時点`, labels: ["FCT", "Backup"], values: [A.fct, A.bk] },
   ], {
     x: 0.5, y: top + 0.35, w: 4.0, h: 2.3, barDir: "col", barGrouping: "clustered", barGapWidthPct: 60,
     chartColors: [HEX.accent6, HEX.accent1], showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 11,
@@ -85,9 +92,9 @@ pres.addSection({ title: "役員報告" });
     catAxisLabelColor: HEX.dk1, ...axisFont, objectName: "pipe-chart",
   });
   s.addText([
-    { text: "Backupが88件→40件に減少", options: { bold: true, breakLine: true } },
-    { text: "9F以降の動き: 来期へ移動54件(うちBackup49件)、新規追加22件、LOST等5件", options: { breakLine: true } },
-    { text: "下期FCT50件のうち32件が3月計上、27件は納期未定(C)" },
+    { text: `Backupが${A.bk9}件→${A.bk}件に減少`, options: { bold: true, breakLine: true } },
+    { text: `9F以降の動き: 来期へ移動${A.moved}件(うちBackup${A.moved_bk}件)、新規追加${A.new}件、LOST等${A.lost}件`, options: { breakLine: true } },
+    { text: `下期FCT${A.h2_fct}件のうち${A.mar}件が3月計上、${A.mar_c}件は納期未定(C)` },
   ], { x: 0.65, y: top + 2.7, w: 3.7, h: 1.1, fontSize: 11, color: C.text1, margin: 0, valign: "top",
     paraSpaceAfter: 3, isTextBox: true, objectName: "pipe-note" });
 
@@ -96,11 +103,11 @@ pres.addSection({ title: "役員報告" });
   card(s, { x: x2, y: top, w: 3.6, h: colH, fill: C.background1, name: "col-win" });
   label(s, "勝敗(FY20-25実績)", x2, top, 3.6, { size: 14, name: "win-h" });
   s.addText([
-    { text: "74%", options: { fontSize: 30, bold: true, color: C.text2 } },
-    { text: "  335勝118敗", options: { fontSize: 12, color: C.text1 } },
+    { text: pct(WL.rate), options: { fontSize: 30, bold: true, color: C.text2 } },
+    { text: `  ${WL.win}勝${WL.loss}敗`, options: { fontSize: 12, color: C.text1 } },
   ], { x: x2, y: top + 0.38, w: 3.6, h: 0.55, margin: 0, isTextBox: true, objectName: "win-big" });
   s.addChart(pres.charts.BAR, [
-    { name: "勝率", labels: ["SH", "MA", "SA", "ID"], values: [0.79, 0.77, 0.67, 0.58] },
+    { name: "勝率", labels: WL.models.map((m) => m[0]), values: WL.models.map((m) => m[1]) },
   ], {
     x: x2, y: top + 0.95, w: 3.6, h: 1.55, barDir: "bar", chartColors: [HEX.accent1],
     showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0%", dataLabelFontSize: 11,
@@ -123,13 +130,7 @@ pres.addSection({ title: "役員報告" });
   const hdr = ["一次店", "FCT", "Backup", "着地寄与", "期外移動", "勝率"].map((t) => ({
     text: t, options: { bold: true, fontSize: 9, color: C.background1, fill: { color: C.text2 }, align: t === "一次店" ? "left" : "center" },
   }));
-  const rows = [
-    ["富士フイルム和光", 17, 13, "11.7", 16, "79%"],
-    ["バイオテック・ラボ", 6, 1, "3.7", 3, "72%"],
-    ["池田理化", 5, 5, "3.6", 7, "85%"],
-    ["レスター", 3, 3, "2.1", 6, "77%"],
-    ["ナカライテスク", 2, 8, "2.1", 3, "68%"],
-  ].map((r, i) => r.map((v, j) => ({ text: String(v), options: {
+  const rows = AG.rows.map((r) => [r[0], r[1], r[2], f1(r[3]), r[4], r[5] == null ? "-" : pct(r[5])]).map((r, i) => r.map((v, j) => ({ text: String(v), options: {
     align: j === 0 ? "left" : "center", fill: { color: i % 2 ? C.background2 : C.background1 },
     bold: j === 0 && i === 0, color: j === 4 && v >= 6 ? C.accent4 : C.text1 } })));
   s.addTable([hdr, ...rows], {
@@ -138,27 +139,29 @@ pres.addSection({ title: "役員報告" });
     objectName: "agent-table",
   });
   s.addText([
-    { text: "上位5社で下期着地寄与の68%", options: { bold: true, breakLine: true } },
-    { text: "和光に集中: FCT17件、期外移動16件、期日超過・アクション未記入24件", options: { breakLine: true } },
+    { text: `上位5社で下期着地寄与の${pct(AG.share)}`, options: { bold: true, breakLine: true } },
+    { text: `和光に集中: FCT${AG.wako_fct}件、期外移動${AG.wako_moved}件、期日超過・アクション未記入${AG.wako_open}件`, options: { breakLine: true } },
     { text: "着地寄与 = FCT×モデル勝率 + Backup×10%(台)" , options: { color: C.accent5, fontSize: 9 } },
   ], { x: x3 + 0.15, y: top + 2.35, w: 3.95, h: 1.4, fontSize: 11, color: C.text1, margin: 0, valign: "top",
     paraSpaceAfter: 3, isTextBox: true, objectName: "agent-note" });
 
-  s.addNotes("必要リード30件は、Sep報告と同じ式(着地理論値=成約+FCT×勝率+Backup×10%、必要リード=不足÷勝率)を10/5版の案件Excelに当てた値。9F版で再計算するとスライドの21件とほぼ一致する。");
+  s.addNotes(`必要リード${A.need}件は、Sep報告と同じ式(着地理論値=成約+FCT×勝率+Backup×10%、必要リード=不足÷勝率)を${LB}版の案件Excelに当てた値。9F版で再計算するとスライドの21件とほぼ一致する。`);
 }
 
 
 // ---------------- Slide 2: Q3 ----------------
 {
   const s = pres.addSlide({ masterName: "TITLE_ONLY", sectionTitle: "役員報告" });
-  s.addText("Q3 BGT18台に対し見込み10.0台、FCT決め切りとQ4前倒しで8台を埋める", { placeholder: "title" });
-  s.addText("Q3 FCT16件のうち13件が納期未定(C)。MTO品は受注から5週超のため、12月納品には11月上旬の受注確定がリミット", { placeholder: "body" });
+  s.addText(Q.max_all + Q.bk < Q.bgt
+    ? `Q3 BGT${Q.bgt}台に対し見込み${f1(Q.land)}台、Q3全件でも届かずQ4前倒しが必須`
+    : `Q3 BGT${Q.bgt}台に対し見込み${f1(Q.land)}台、FCT決め切りとQ4前倒しで${f1(Q.gap)}台を埋める`, { placeholder: "title" });
+  s.addText(`Q3 FCT${Q.fct}件のうち${Q.fct_c}件が納期未定(C)。MTO品は受注から5週超のため、12月納品には11月上旬の受注確定がリミット`, { placeholder: "body" });
 
   const kpis = [
-    ["Q3 BGT(10〜12月)", "18台", "年間9F 60台のうち下期49台の一部", C.text2],
-    ["Q3 着地理論値(10/5)", "10.0台", "9F時点 12.2台から ▲2.2台", C.text2],
-    ["Q3 ギャップ", "8.0台", "FCTを全件取っても16台", C.accent4],
-    ["Q3 FCT", "16件", "うち納期未定(C) 13件・MTO 3件", C.accent4],
+    ["Q3 BGT(10〜12月)", `${Q.bgt}台`, `年間9F ${A.target}台のうち下期${A.h2}台の一部`, C.text2],
+    [`Q3 着地理論値(${LB})`, `${f1(Q.land)}台`, `9F時点 ${f1(Q.land9)}台から ▲${f1(Q.land9 - Q.land)}台`, C.text2],
+    ["Q3 ギャップ", `${f1(Q.gap)}台`, `FCT・Backupを全件取っても${Q.max_all + Q.bk}台`, C.accent4],
+    ["Q3 FCT", `${Q.fct}件`, `うち納期未定(C) ${Q.fct_c}件・MTO ${Q.mto}件`, C.accent4],
   ];
   kpis.forEach(([t, v, sub, col], i) => {
     const x = 0.5 + i * 3.13, y = 1.55, w = 2.93, h = 1.3;
@@ -174,8 +177,8 @@ pres.addSection({ title: "役員報告" });
   card(s, { x: 0.5, y: top, w: 3.7, h: colH, fill: C.background1, name: "q3-pipe" });
   label(s, "Q3パイプライン(確度>0)", 0.5, top, 3.7, { size: 14, name: "q3-pipe-h" });
   s.addChart(pres.charts.BAR, [
-    { name: "9F時点", labels: ["FCT", "Backup"], values: [18, 13] },
-    { name: "10/5時点", labels: ["FCT", "Backup"], values: [16, 3] },
+    { name: "9F時点", labels: ["FCT", "Backup"], values: [Q.fct9, Q.bk9] },
+    { name: `${LB}時点`, labels: ["FCT", "Backup"], values: [Q.fct, Q.bk] },
   ], {
     x: 0.5, y: top + 0.35, w: 3.7, h: 2.3, barDir: "col", barGrouping: "clustered", barGapWidthPct: 60,
     chartColors: [HEX.accent6, HEX.accent1], showValue: true, dataLabelPosition: "outEnd", dataLabelFontSize: 11,
@@ -184,9 +187,9 @@ pres.addSection({ title: "役員報告" });
     catAxisLabelColor: HEX.dk1, ...axisFont, objectName: "q3-pipe-chart",
   });
   s.addText([
-    { text: "Backupが13件→3件に減り、予備がほぼない", options: { bold: true, breakLine: true } },
-    { text: "FCT16件: SH7・MA7・ID1・FP1", options: { breakLine: true } },
-    { text: "顧客: アカデミア10・バイオ企業5・製薬1" },
+    { text: `9Fから FCT${Q.fct9}→${Q.fct}件・Backup${Q.bk9}→${Q.bk}件`, options: { bold: true, breakLine: true } },
+    { text: `FCT${Q.fct}件: ` + Object.entries(Q.models).map(([k, v]) => `${k}${v}`).join("・"), options: { breakLine: true } },
+    { text: "顧客: " + Object.entries(Q.genre).map(([k, v]) => `${{ AC: "アカデミア", BT: "バイオ企業", PHM: "製薬" }[k]}${v}`).join("・") },
   ], { x: 0.65, y: top + 2.7, w: 3.4, h: 1.1, fontSize: 11, color: C.text1, margin: 0, valign: "top",
     paraSpaceAfter: 3, isTextBox: true, objectName: "q3-pipe-note" });
 
@@ -197,23 +200,17 @@ pres.addSection({ title: "役員報告" });
   const hdr = ["一次店", "FCT", "Backup", "うち納期未定", "見込み"].map((t) => ({
     text: t, options: { bold: true, fontSize: 9, color: C.background1, fill: { color: C.text2 }, align: t === "一次店" ? "left" : "center" },
   }));
-  const rows = [
-    ["富士フイルム和光", 6, 1, 5, "3.5"],
-    ["池田理化", 4, 1, 3, "2.7"],
-    ["ナカライテスク", 2, 1, 1, "1.4"],
-    ["バイオテック・ラボ", 1, 0, 1, "0.7"],
-    ["その他・未記入", 3, 0, 3, "1.8"],
-    ["計", 16, 3, 13, "10.0"],
-  ].map((r, i) => r.map((v, j) => ({ text: String(v), options: {
-    align: j === 0 ? "left" : "center", fill: { color: i === 5 ? C.background2 : C.background1 },
-    bold: i === 5 || (j === 0 && i === 0), color: j === 3 && v >= 3 && i < 5 ? C.accent4 : C.text1 } })));
+  const last = Q.agents.length - 1;
+  const rows = Q.agents.map((r) => [r[0], r[1], r[2], r[3], f1(r[4])]).map((r, i) => r.map((v, j) => ({ text: String(v), options: {
+    align: j === 0 ? "left" : "center", fill: { color: i === last ? C.background2 : C.background1 },
+    bold: i === last || (j === 0 && i === 0), color: j === 3 && v >= 3 && i < last ? C.accent4 : C.text1 } })));
   s.addTable([hdr, ...rows], {
     x: x2, y: top + 0.4, w: 4.1, colW: [1.45, 0.5, 0.6, 0.85, 0.7], rowH: 0.3, fontSize: 10,
     fontFace: THEME.bodyFontFace, border: { type: "solid", pt: 0.5, color: HEX.lt2 }, margin: [0, 0.04, 0, 0.04],
     valign: "middle", objectName: "q3-agent-table",
   });
   s.addText([
-    { text: "和光・池田でQ3 FCTの6割(10件)", options: { bold: true, breakLine: true } },
+    { text: `${Q.top2.map(ab).join("・")}でQ3 FCTの${pct(Q.top2_fct / Q.fct)}(${Q.top2_fct}件)`, options: { bold: true, breakLine: true } },
     { text: "納期を月決(A)・Q決(B)に固められるかが勝負", options: { breakLine: true } },
     { text: "見込み = FCT×モデル勝率 + Backup×10%", options: { color: C.accent5, fontSize: 9 } },
   ], { x: x2 + 0.15, y: top + 2.65, w: 3.8, h: 1.1, fontSize: 11, color: C.text1, margin: 0, valign: "top",
@@ -222,25 +219,25 @@ pres.addSection({ title: "役員報告" });
   // Column 3: path to 18
   const x3 = 8.8;
   card(s, { x: x3, y: top, w: 4.03, h: colH, fill: C.background1, name: "q3-path" });
-  label(s, "18台への道筋(必要水準)", x3, top, 4.03, { size: 14, name: "q3-path-h" });
+  label(s, `${Q.bgt}台への道筋(必要水準)`, x3, top, 4.03, { size: 14, name: "q3-path-h" });
   const pcats = ["現状見込み", "必要水準"];
   s.addChart(pres.charts.BAR, [
-    { name: "見込み", labels: pcats, values: [10.0, 0] },
-    { name: "Q3 FCT決め切り", labels: pcats, values: [0, 13] },
-    { name: "Backup昇格", labels: pcats, values: [0, 1] },
-    { name: "Q4から前倒し", labels: pcats, values: [0, 4] },
+    { name: "見込み", labels: pcats, values: [Q.land, 0] },
+    { name: "Q3 FCT決め切り", labels: pcats, values: [0, Q.close] },
+    { name: "Backup昇格", labels: pcats, values: [0, Q.bk_up] },
+    { name: "Q4から前倒し", labels: pcats, values: [0, Q.pf] },
   ], {
     x: x3, y: top + 0.35, w: 1.95, h: 3.0, barDir: "col", barGrouping: "stacked", barGapWidthPct: 35,
     chartColors: [HEX.accent5, HEX.accent1, HEX.accent3, HEX.accent2], showValue: true, dataLabelPosition: "ctr",
     dataLabelFormatCode: "0.0;;;", dataLabelFontSize: 11, dataLabelColor: HEX.lt1, showLegend: false,
-    valAxisHidden: true, valAxisMaxVal: 19, valAxisMinVal: 0, valGridLine: { style: "none" },
+    valAxisHidden: true, valAxisMaxVal: Q.bgt + 1, valAxisMinVal: 0, valGridLine: { style: "none" },
     catGridLine: { style: "none" }, catAxisLabelFontSize: 10, catAxisLabelColor: HEX.dk1, ...axisFont,
     objectName: "q3-path-chart",
   });
   const legend = [
-    ["Q3 FCT決め切り 13台", "16件中13件(81%)。モデル勝率なら約10件", C.accent1],
-    ["Backup昇格 1台", "Q3 Backup 3件から1件", C.accent3],
-    ["Q4から前倒し 4台", "Q4 FCTのうち確度60%以上・納期A/Bの8件から半分", C.accent2],
+    [`Q3 FCT決め切り ${Q.close}台`, `${Q.fct}件中${Q.close}件(${pct(Q.close_rate)})。モデル勝率なら約${Q.close_expected}件`, C.accent1],
+    [`Backup昇格 ${Q.bk_up}台`, `Q3 Backup ${Q.bk}件から${Q.bk_up}件`, C.accent3],
+    [`Q4から前倒し ${Q.pf}台`, `Q4 FCTのうち確度60%以上・納期A/Bの${Q.pf_cand}件から半分`, C.accent2],
   ];
   legend.forEach(([t, d, col], i) => {
     const ly = top + 0.55 + i * 0.95;
@@ -255,25 +252,29 @@ pres.addSection({ title: "役員報告" });
   label(s, "前倒し分は年間の台数を増やさない点に注意", x3 + 0.15, top + 3.4, 3.8,
     { size: 10, bold: false, color: C.accent5, name: "q3-path-note" });
 
-  s.addNotes("Q3=2026年10〜12月。見込みは案件Excel(10/5版)のQ3案件に、年間と同じ式(FCT×モデル勝率+Backup×10%)を当てた値。必要水準の内訳(決め切り13・Backup1・前倒し4)は18台に届く組み合わせの一例で、予測ではない。MTO>Week+5週は案件Excelの記載。");
+  s.addNotes(`Q3=2026年10〜12月。見込みは案件Excel(${LB}版)のQ3案件(10FCT計上分を含む)に、年間と同じ式(FCT×モデル勝率+Backup×10%)を当てた値。必要水準の内訳(決め切り${Q.close}・Backup${Q.bk_up}・前倒し${Q.pf})は${Q.bgt}台に届く組み合わせの一例で、予測ではない。MTO>Week+5週は案件Excelの記載。`);
 }
 
 // ---------------- Slide 3: アクションと挽回 ----------------
 {
   const s = pres.addSlide({ masterName: "TITLE_ONLY", sectionTitle: "役員報告" });
-  s.addText("11/7までにQ3受注を確定し年間8.7台を挽回、9F達成には棚卸の倍増が必要", { placeholder: "title" });
-  s.addText("Q3は11/7までに受注確定(12月納品のリミット)。年間は厳しめの率(昇格15%・引き戻し10%・商談化2%)で試算し、11/7に判定", { placeholder: "body" });
+  s.addText(`11/7までにQ3受注を確定し年間${f1(RC.filled)}台を挽回、9F達成には棚卸の倍増が必要`, { placeholder: "title" });
+  s.addText(`Q3は11/7までに受注確定(12月納品のリミット)。年間は厳しめの率(昇格${pct(RC.rate_up)}・引き戻し${pct(RC.rate_pb)}・商談化${pct(RC.rate_lead)})で試算し、11/7に判定`, { placeholder: "body" });
 
   // Waterfall (stacked bar with invisible base)
   const top = 1.55;
   card(s, { x: 0.5, y: top, w: 5.6, h: 5.4, fill: C.background1, name: "col-wf" });
   label(s, "挽回見込み(台)", 0.5, top, 5.6, { size: 14, name: "wf-h" });
+  // ウォーターフォールの位置: 不足から各アクションを順に差し引く
+  const steps = [RC.up, RC.pb, RC.tm, RC.lead];
+  const bases = []; let cur = RC.short;
+  steps.forEach((v) => { cur = Math.round((cur - v) * 10) / 10; bases.push(cur); });
   const cats = ["不足", "①Backup昇格", "②引き戻し", "③テレマ", "④⑤リード・展示会", "残ギャップ"];
-  const wfY = top + 0.35, wfH = 2.6, L = { x: 0.02, y: 0.12, w: 0.96, h: 0.72 }, VMAX = 16;
+  const wfY = top + 0.35, wfH = 2.6, L = { x: 0.02, y: 0.12, w: 0.96, h: 0.72 }, VMAX = Math.ceil(RC.short + 1);
   s.addChart(pres.charts.BAR, [
-    { name: "base", labels: cats, values: [0, 12.0, 9.0, 7.6, 6.3, 0] },
-    { name: "不足", labels: cats, values: [14.9, 0, 0, 0, 0, 6.3] },
-    { name: "アクション", labels: cats, values: [0, 2.9, 3.0, 1.4, 1.3, 0] },
+    { name: "base", labels: cats, values: [0, ...bases, 0] },
+    { name: "不足", labels: cats, values: [RC.short, 0, 0, 0, 0, RC.gap] },
+    { name: "アクション", labels: cats, values: [0, ...steps, 0] },
   ], {
     x: 0.5, y: wfY, w: 5.6, h: wfH, barDir: "col", barGrouping: "stacked", barGapWidthPct: 40,
     chartColors: [HEX.lt1, HEX.accent4, HEX.accent2], showLegend: false, valAxisHidden: true, catAxisHidden: true,
@@ -281,7 +282,8 @@ pres.addSection({ title: "役員報告" });
     valGridLine: { style: "none" }, catGridLine: { style: "none" }, ...axisFont, objectName: "wf-chart",
   });
   const px = 0.5 + L.x * 5.6, pw = L.w * 5.6, py = wfY + L.y * wfH, ph = L.h * wfH, step = pw / 6;
-  const tops = [14.9, 14.9, 12.0, 9.0, 7.6, 6.3], vals = ["14.9", "+2.9", "+3.0", "+1.4", "+1.3", "6.3"];
+  const tops = [RC.short, RC.short, ...bases.slice(0, 3), RC.gap];
+  const vals = [f1(RC.short), ...steps.map((v) => `+${f1(v)}`), f1(RC.gap)];
   const catTxt = ["不足", "①Backup\n昇格", "②引き戻し", "③テレマ", "④⑤リード\n・展示会", "残ギャップ"];
   tops.forEach((t, i) => {
     s.addText(vals[i], { x: px + i * step, y: py + (VMAX - t) / VMAX * ph - 0.3, w: step, h: 0.28,
@@ -290,13 +292,13 @@ pres.addSection({ title: "役員報告" });
     s.addText(catTxt[i], { x: px + i * step, y: py + ph + 0.06, w: step, h: 0.42, fontSize: 10, align: "center",
       valign: "top", color: C.text1, margin: 0, isTextBox: true, objectName: `wf-cat-${i}` });
   });
-  label(s, "代理店の既存案件 5.9台 / インハウス施策 2.7台", 0.65, top + 3.2, 5.3,
+  label(s, `代理店の既存案件 ${f1(RC.agent)}台 / インハウス施策 ${f1(RC.inhouse)}台`, 0.65, top + 3.2, 5.3,
     { size: 11, bold: false, color: C.text1, name: "wf-split" });
 
   // scenario cards
   const sc = [
-    ["厳しめ(確認済みの率)", "着地 53.7台", "9F目標に ▲6.3台", C.accent3],
-    ["ストレッチ(昇格31%/引戻21%)", "着地 60台", "9F達成 = 上期▲7台も挽回", C.accent2],
+    ["厳しめ(確認済みの率)", `着地 ${f1(RC.land_after)}台`, `9F目標に ▲${f1(RC.gap)}台`, C.accent3],
+    [`ストレッチ(昇格${pct(RC.stretch_up)}/引戻${pct(RC.stretch_pb)})`, `着地 ${A.target}台`, "9F達成 = 上期▲7台も挽回", C.accent2],
   ];
   sc.forEach(([t, v, sub, col], i) => {
     const x = 0.65 + i * 2.7, y = top + 3.65, w = 2.55, h = 1.55;
@@ -322,20 +324,20 @@ pres.addSection({ title: "役員報告" });
   });
   const lanes = [
     ["Q3刈り取り", C.accent4, [
-      [0, 1, "Q3 FCT16件 納期確定"],
-      [1, 2, "Q4前倒し8件 年内受注交渉"],
+      [0, 1, `Q3 FCT${Q.fct}件 納期確定`],
+      [1, 2, `Q4前倒し${Q.pf_cand}件 年内受注交渉`],
       [3, 2, "PO回収・12月納品確定"],
     ]],
     ["代理店", C.accent1, [
       [0, 1, "上位5社 棚卸会"],
-      [1, 1, "Backup昇格判定 40件"],
+      [1, 1, `Backup昇格判定 ${AC.bk_cases}件`],
       [2, 2, "ID/FP デモ・見積(11月期限)"],
-      [1, 2, "来期移動・前倒し 64件の引き戻し交渉"],
+      [1, 2, `来期移動・前倒し ${AC.pull_cases}件の引き戻し交渉`],
     ]],
     ["インハウス", C.accent2, [
       [0, 4, "テレマ 422名(10/9〜、S/A 44名を先行)"],
       [1, 1, "NGS EXPO リード配分"],
-      [2, 1, "滞留リード126件 案件化"],
+      [2, 1, `滞留リード${AC.prospecting}件 案件化`],
     ]],
     ["管理", C.accent5, [
       [3, 1, "10月末FCTレビュー"],
@@ -381,7 +383,7 @@ pres.addSection({ title: "役員報告" });
   ], { x: gx + 0.3, y: dy + 0.05, w: gw - 0.6, h: dh - 0.1, fontSize: 11, color: C.text1, margin: 0,
     valign: "middle", paraSpaceAfter: 3, isTextBox: true, objectName: "ask-text" });
 
-  s.addNotes("①=下期Backup40件×15%×(モデル勝率−10%)、②=来期へ移った54件×10%×モデル勝率、③=422名×2%≒8.4商談×FCT化32%(Sep報告slide4: 30/94)×平均勝率0.54、④⑤=リード保証148件と展示会2回×110リードを同じ率で換算。ストレッチは①②の率を2.1倍にした場合。");
+  s.addNotes(`①=下期Backup${AC.bk_cases}件×${pct(RC.rate_up)}×(モデル勝率−10%)、②=来期へ移った${A.moved}件×${pct(RC.rate_pb)}×モデル勝率、③=テレマ422名×${pct(RC.rate_lead)}×FCT化32%(Sep報告slide4: 30/94)×平均勝率0.54、④⑤=リード保証148件と展示会2回×110リードを同じ率で換算。ストレッチは①②の率を同じ倍率で引き上げ、不足を埋める水準。`);
 }
 
 (async () => {

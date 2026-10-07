@@ -6,7 +6,9 @@
 backup_rate = 0.10   # Backupの加重(21件算出式と同じ)
 
 [source]
-pipeline_latest = "20261005_1_Pipeline_JP.xlsx"   # 案件Excel(最新) シート: MOC Pipeline 1005
+pipeline_latest = "2026_10FCT_Pipeline_JP.xlsx"   # 案件Excel(最新・10FCT版)
+latest_label    = "10FCT"                         # 出力での最新データの呼び名
+case_id_prefix  = "P10F"                          # 案件ID の接頭辞(P10F-R<Excel行>)
 pipeline_9f     = "2609_9FCT_Pipeline_JP_3.xlsx"  # 9FCT時点の案件Excel(21件算出の基準) シート: MOC Pipeline 9FCT
 leads           = "FY26______________.xlsx"        # FY26新規リード分析(Salesforce生データ)
 winloss         = "_FY25____________________.xlsx" # FY20-FY25 商談総括(勝敗)
@@ -16,7 +18,7 @@ measures        = "Q3_____.xlsx"                   # 施策表(Q3直近施策)
 fy_start = 202604     # FY26 = 2026/4〜2027/3
 fy_end   = 202703
 h2_start = 202610     # 下期(今期の残り)
-as_of    = "2026-10-06"
+as_of    = "2026-10-07"
 
 # 21件の算出式(出典: LST MOC FY26 Sep 2026 slide 2「JP 年間」)
 #   着地理論値 = 成約 + FCT案件(未成約)×勝率 + Backup×10%
@@ -98,3 +100,12 @@ new_to_fct_rate = 0.319      # 新規登録→今期FCT化率(Sep資料 slide4: 
 [definitions]
 genre = { AC = "アカデミア", BT = "バイオテック企業", PHM = "製薬企業", BTL = "バイオテック企業" }  # BTLは定義外のためBT扱い(仮置き)
 delivery = { A = "月決", B = "Q決", C = "未定" }
+
+# Q3(2026年10〜12月)
+[q3]
+start = 202610
+end = 202612
+bgt = 18                 # Q3 BGT(2026-10-06 ユーザー提示)
+backup_upgrade = 1       # 18台への道筋: Q3 Backupからの昇格(台)
+pull_forward_share = 0.5 # 18台への道筋: Q4前倒し候補のうち年内受注に持ち込む割合
+pf_min_prob = 0.6        # Q4前倒し候補: 確度60%以上 または 納期A/B

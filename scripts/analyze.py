@@ -17,6 +17,10 @@ from load import load_pipeline  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 
 # LST MOC FY26 Sep 2026 slide 2 の記載値(照合用)
+def LBL(cfg):
+    return cfg["source"].get("latest_label", "最新")
+
+
 PLAN_MODELS = ("SH", "MA", "SA", "ID", "FP")  # 9F目標のあるモデル(CGXは対象外)
 DECK_9F = pd.DataFrame(
     {"FCST案件": [19, 15, 3, 5, 7], "Backup": [32, 16, 13, 12, 15], "着地理論値": [21, 11, 6, 4, 7],
@@ -101,7 +105,12 @@ def _fmt(v):
 def classify(df, cfg):
     p = cfg["period"]
     d = df.copy()
-    d["成約"] = d["区分"].str.match(r"^\d+FCT$")
+    # 区分「nFCT」はそのFCT版での計上を示す。確度100%か上期(締め済み)の案件は成約、
+    # それ以外(例: 10FCTで計上された下期案件)は未成約のFCTとして扱う
+    nfct = d["区分"].str.match(r"^\d+FCT$")
+    d["区分原"] = d["区分"]
+    d["成約"] = nfct & ((d["案件確度"] >= 1) | (d["時期"] < p["h2_start"]))
+    d.loc[nfct & ~d["成約"] & (d["案件確度"] > 0), "区分"] = "FCT"
     d["今期"] = d["時期"].between(p["fy_start"], p["fy_end"])
     d["open_FCT"] = d["今期"] & (d["区分"] == "FCT") & (d["案件確度"] > 0)
     d["open_BK"] = d["今期"] & (d["区分"] == "backup") & (d["案件確度"] > 0)
@@ -136,7 +145,7 @@ def landing(d, cfg, label):
     return t
 
 
-# ---------- 9F → 10/5 の動き ----------
+# ---------- 9F → 最新 の動き ----------
 
 def movement(a, b, cfg):
     p = cfg["period"]
@@ -292,7 +301,7 @@ def action_list(op, pf, cfg, as_of):
     x["顧客ジャンル"] = x["顧客ジャンル"].map(dfn["genre"]).fillna(x["顧客ジャンル"])
     x["納期確度"] = x["納期確度"].map(lambda v: f"{v}({dfn['delivery'][v]})" if v in dfn["delivery"] else v)
     x["課題分類"] = x["課題タグ"].apply(lambda t: "・".join(t))
-    x["案件ID"] = "P1005-R" + x["Excel行"].astype(str)
+    x["案件ID"] = cfg["source"].get("case_id_prefix", "P") + "-R" + x["Excel行"].astype(str)
     x["アクション期日"] = x["期日"].dt.strftime("%Y-%m-%d").fillna("")
     cols = ["優先度", "案件ID", "対象", "担当", "モデルイニシャル", "モデル詳細", "顧客ジャンル", "時期", "区分",
             "案件確度", "納期確度", "一次店", "二次店", "課題分類", "アクション期日", "期日状態", "商談期限(目安)",
@@ -303,6 +312,16 @@ def action_list(op, pf, cfg, as_of):
 # ---------- 本体 ----------
 
 def main(snap_day):
+    stats, cfg = compute(snap_day)
+    out = ROOT / "出力"
+    out.mkdir(exist_ok=True)
+    tag = snap_day.replace("-", "")
+    write_excel(out / f"パイプライン不足分析_{tag}.xlsx", stats, cfg)
+    write_md(out / f"パイプライン不足分析_{tag}.md", stats, cfg)
+    print("written:", out)
+
+
+def compute(snap_day):
     cfg = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
     src = cfg["source"]
     snap = ROOT / "作業" / "snapshots" / snap_day
@@ -322,7 +341,7 @@ def main(snap_day):
 
     # 前提: 21件の再現と最新化
     land9 = landing(a, cfg, "9FCT時点(再計算)")
-    land10 = landing(b, cfg, "10/5時点(最新)")
+    land10 = landing(b, cfg, f"{LBL(cfg)}時点(最新)")
     deck = DECK_9F.copy()
     deck.loc["計"] = deck.sum()
     deck = deck.reset_index().rename(columns={"index": "モデル"})
@@ -378,13 +397,8 @@ def main(snap_day):
     stats = dict(
         land9=land9, land10=land10, deck=deck, mtab=mtab, moved=moved, agents=agents, sub=sub, acts=acts,
         lead_phase=lead_phase, lead_fy=lead_fy, lr=lr, demo_t=demo_t, wl=wl, month_t=month_t, measures=measures,
-        sc=sc, op=op, pf=pf, b=b, cfg=cfg)
-    out = ROOT / "出力"
-    out.mkdir(exist_ok=True)
-    tag = snap_day.replace("-", "")
-    write_excel(out / f"パイプライン不足分析_{tag}.xlsx", stats, cfg)
-    write_md(out / f"パイプライン不足分析_{tag}.md", stats, cfg)
-    print("written:", out)
+        sc=sc, op=op, pf=pf, a=a, b=b, cfg=cfg, snap=snap_day)
+    return stats, cfg
 
 
 def scenario(b, land10, op, pf, moved, cfg):
@@ -402,7 +416,7 @@ def scenario(b, land10, op, pf, moved, cfg):
     gl = sc["guarantee_leads"] * lm
     ex = sc["expo_leads"] * 2 * lm  # NGS EXPO(10月)+細胞凝集研究会(11月)の2回
     rows = [
-        ("不足(10/5時点)", None, None, round(short, 2), "着地理論値 − 9F目標(モデル合計)"),
+        (f"不足({LBL(cfg)}時点)", None, None, round(short, 2), "着地理論値 − 9F目標(モデル合計)"),
         ("① 下期Backup→FCT昇格", len(bk), f"昇格{up:.0%}", round(up_unit * up, 2),
          f"対象{len(bk)}件 × 昇格率{up:.0%} × (モデル勝率−10%)"),
         ("② 期外移動案件の引き戻し", len(mv), f"引き戻し{pb:.0%}", round(back_unit * pb, 2),
@@ -466,7 +480,7 @@ def write_excel(path, s, cfg):
 def premise_df(s, cfg):
     m = cfg["models"]
     rows = [
-        ("データソース", "案件Excel(最新)", f"{cfg['source']['pipeline_latest']} / シート MOC Pipeline 1005", "確定"),
+        ("データソース", "案件Excel(最新)", f"{cfg['source']['pipeline_latest']} / 先頭シート", "確定"),
         ("データソース", "案件Excel(9F)", f"{cfg['source']['pipeline_9f']} / シート MOC Pipeline 9FCT", "確定"),
         ("データソース", "施策表", f"{cfg['source']['measures']} / Sheet1", "確定"),
         ("データソース", "新規リード", f"{cfg['source']['leads']} / 1_Salesforce生データ", "確定"),
@@ -579,13 +593,14 @@ def write_md(path, s, cfg):
 
     L = []
     L.append(f"# パイプライン不足分析と短期アクション(基準日 {cfg['period']['as_of']})\n")
-    L.append("> 出典: 作業/snapshots/2026-10-06/ のコピー(原本は未変更、MANIFEST.sha256で照合)。"
-             "施設名・個人名・自由記述の原文は載せていません。案件は `案件ID`(P1005-R<スナップショットのExcel行>)で参照してください。"
+    lbl = LBL(cfg)
+    L.append(f"> 出典: 作業/snapshots/{s['snap']}/ のコピー(原本は未変更、MANIFEST.sha256で照合)。最新の案件Excel: {cfg['source']['pipeline_latest']}({lbl})。"
+             f"施設名・個人名・自由記述の原文は載せていません。案件は `案件ID`({cfg['source'].get('case_id_prefix', 'P')}-R<スナップショットのExcel行>)で参照してください。"
              "**仮置き**と書いた数字は前提が確定していないものです。\n")
 
     L.append("## 1. 結論\n")
-    L.append(f"1. **21件は9FCT時点の数字で、10/5時点では約{t10['必要リード(件)']:.0f}件(FCT相当)に増えている。** "
-             f"着地理論値は {t9['着地理論値']:.1f}台(9F)から {t10['着地理論値']:.1f}台(10/5)に下がり、"
+    L.append(f"1. **21件は9FCT時点の数字で、{lbl}時点では約{t10['必要リード(件)']:.0f}件(FCT相当)に増えている。** "
+             f"着地理論値は {t9['着地理論値']:.1f}台(9F)から {t10['着地理論値']:.1f}台({lbl})に下がり、"
              f"9F目標60台(1H実績11台+下期49台。達成すれば上期▲7台も挽回)に対する不足は {-t9['不足(台)']:.1f}台 → {-t10['不足(台)']:.1f}台に広がった。"
              f"主な原因は、9F以降に今期の案件{nmove}件(うちBackup {nmove_bk}件)が来期以降へ移ったこと。今期の新規追加は{nnew}件にとどまる。")
     L.append(f"2. **埋め手の主力は代理店がすでに持っている案件。インハウスリードは補助。** "
@@ -624,14 +639,14 @@ def write_md(path, s, cfg):
     L.append("- 案件Excelは見出しと実データが1列ずれているので、'Sales month'列を基準に列の位置で読んでいる\n")
 
     L.append("## 3. 21件の再現と最新化(モデル別)\n")
-    L.append("スライドの値・9Fデータでの再計算・10/5データでの再計算を並べた。9Fでの再計算はスライドとほぼ一致する(MA・IDでFCT件数が±1違う)。\n")
+    L.append(f"スライドの値・9Fデータでの再計算・{lbl}データでの再計算を並べた。9Fでの再計算はスライドとほぼ一致する(MA・IDでFCT件数が±1違う)。\n")
     show = ["データ", "モデル", "実績(成約)", "FCT案件", "Backup", "着地理論値", "不足(台)", "必要リード(件)"]
     L.append(md_table(pd.concat([s["deck"].rename(columns={"FCST案件": "FCT案件", "9F不足": "不足(台)", "必要リード": "必要リード(件)"}),
                                  l9, l10], ignore_index=True).reindex(columns=show)))
     L.append("")
 
-    L.append("## 4. 9F→10/5の案件移動\n")
-    L.append("9F時点で今期にあったFCT/Backup案件(確度>0)が、10/5時点でどうなったか(施設名+モデル詳細で照合)。\n")
+    L.append(f"## 4. 9F→{lbl}の案件移動\n")
+    L.append(f"9F時点で今期にあったFCT/Backup案件(確度>0)が、{lbl}時点でどうなったか(施設名+モデル詳細で照合)。\n")
     L.append(md_table(s["mtab"], index=True))
     L.append("")
 
